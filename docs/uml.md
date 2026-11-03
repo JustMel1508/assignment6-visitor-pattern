@@ -2,53 +2,49 @@
 
 These diagrams show the implemented production structure. File elements are Java
 records; Directory is a mutable composite. Each analysis visitor implements all five
-overloads declared by ProjectVisitor. Only the core domain and inspection classes
-are shown; immutable result records and Directory's private validation visitor are
-omitted for readability.
+overloads declared by ProjectVisitor. Key properties and methods are shown; immutable
+result records and Directory's private validation visitor are omitted for readability.
+Every analysis visitor also exposes the `reset()` lifecycle method described in README.
 
 ## Class diagram
 
 ```mermaid
 classDiagram
-    direction TB
+    direction LR
     class ProjectElement {
         <<interface>>
-        +accept(ProjectVisitor visitor) void
+        +accept(ProjectVisitor) void
     }
     class ProjectVisitor {
         <<interface>>
-        +visit(SourceCodeFile file) void
-        +visit(TestFile file) void
-        +visit(ConfigurationFile file) void
-        +visit(DependencyFile file) void
-        +visit(Directory directory) void
+        +visit(SourceCodeFile) void
+        +visit(TestFile) void
+        +visit(ConfigurationFile) void
+        +visit(DependencyFile) void
+        +visit(Directory) void
     }
     class SourceCodeFile {
         <<record>>
         -String name
         -int linesOfCode
         -int complexity
-        -boolean hardcodedCredentials
-        -boolean highRisk
-        -boolean production
         -int todoCount
-        +accept(ProjectVisitor visitor) void
+        +accept(ProjectVisitor) void
     }
     class TestFile {
         <<record>>
         -String name
         -int linesOfCode
         -String testedSource
-        +accept(ProjectVisitor visitor) void
+        +accept(ProjectVisitor) void
     }
     class ConfigurationFile {
         <<record>>
         -String name
         -boolean production
         -boolean debugEnabled
-        -boolean insecureSettings
         -boolean exposedCredentials
-        +accept(ProjectVisitor visitor) void
+        +accept(ProjectVisitor) void
     }
     class Dependency {
         <<record>>
@@ -61,44 +57,35 @@ classDiagram
         <<record>>
         -String name
         -List~Dependency~ dependencies
-        +accept(ProjectVisitor visitor) void
+        +accept(ProjectVisitor) void
     }
     class Directory {
         -String name
         -List~ProjectElement~ children
         -Directory parent
-        +name() String
-        +add(ProjectElement child) Directory
-        +children() List~ProjectElement~
-        +accept(ProjectVisitor visitor) void
+        +add(ProjectElement) Directory
+        +children()
+        +accept(ProjectVisitor) void
     }
     class SecurityAuditVisitor {
-        +analyze(ProjectElement root) SecurityReport
-        +reset() void
-        +report() SecurityReport
+        +analyze(ProjectElement)
+        +report()
     }
     class ProjectStatisticsVisitor {
-        +analyze(ProjectElement root) StatisticsReport
-        +reset() void
-        +report() StatisticsReport
+        +analyze(ProjectElement)
+        +report()
     }
     class QualityGateVisitor {
-        -SecurityAuditVisitor security
-        -ProjectStatisticsVisitor statistics
-        +analyze(ProjectElement root) QualityGateReport
-        +reset() void
-        +report() QualityGateReport
+        +analyze(ProjectElement)
+        +report()
     }
     class ComplianceVisitor {
-        +Set~String~ PROHIBITED_DEPENDENCIES
-        +analyze(ProjectElement root) ComplianceReport
-        +reset() void
-        +report() ComplianceReport
+        +analyze(ProjectElement)
+        +report()
     }
     class TechnicalDebtVisitor {
-        +analyze(ProjectElement root) TechnicalDebtReport
-        +reset() void
-        +report() TechnicalDebtReport
+        +analyze(ProjectElement)
+        +report()
     }
     ProjectElement <|.. SourceCodeFile
     ProjectElement <|.. TestFile
@@ -110,7 +97,7 @@ classDiagram
     ProjectVisitor <|.. QualityGateVisitor
     ProjectVisitor <|.. ComplianceVisitor
     ProjectVisitor <|.. TechnicalDebtVisitor
-    Directory "1" *-- "0..*" ProjectElement : children
+    Directory "0..1" *-- "0..*" ProjectElement : children within one tree
     DependencyFile "1" o-- "0..*" Dependency : entries
     ProjectElement ..> ProjectVisitor : accept and double dispatch
     QualityGateVisitor *-- SecurityAuditVisitor : delegates visits
@@ -119,28 +106,22 @@ classDiagram
 
 ## Sequence diagram
 
-The security traversal below uses the actual nested fintech fixture. Directory owns
-traversal; `visit(Directory)` never traverses its children. Other analyses follow
+The security traversal below shows the first source in the actual nested fintech
+fixture; subsequent children are summarized to keep the diagram readable. Directory
+owns traversal; `visit(Directory)` never traverses its children. Other analyses follow
 the same dispatch protocol on the same tree. Compliance defers its cross-file test
-matching until `report()` after collection.
+matching until `report()` after collection. Root elements have no parent; each element
+instance occurs at most once within a project tree.
 
 ```mermaid
 sequenceDiagram
     participant Main
-    participant Factory as FintechProject
     participant Root as fintech-project (Directory)
     participant Src as src (Directory)
     participant Pay as PaymentService (SourceCodeFile)
-    participant User as UserService (SourceCodeFile)
-    participant Tests as tests (Directory)
-    participant Test as PaymentServiceTest (TestFile)
-    participant ConfigDir as config (Directory)
-    participant Config as application.properties (ConfigurationFile)
-    participant Pom as pom.xml (DependencyFile)
     participant Audit as SecurityAuditVisitor
     participant Report as SecurityReport
-    Main->>Factory: create()
-    Factory-->>Main: Root with complete nested tree
+    Note over Main,Root: Main obtains the tree from FintechProject.create()
     Main->>Audit: new SecurityAuditVisitor()
     Main->>Audit: analyze(Root)
     activate Audit
@@ -153,20 +134,7 @@ sequenceDiagram
     Src->>Pay: accept(visitor)
     Pay->>Audit: visit(Pay: SourceCodeFile)
     Audit->>Audit: collect credentials and high-risk findings
-    Src->>User: accept(visitor)
-    User->>Audit: visit(User: SourceCodeFile)
-    Root->>Tests: accept(visitor)
-    Tests->>Audit: visit(Tests)
-    Tests->>Test: accept(visitor)
-    Test->>Audit: visit(Test: TestFile)
-    Root->>ConfigDir: accept(visitor)
-    ConfigDir->>Audit: visit(ConfigDir)
-    ConfigDir->>Config: accept(visitor)
-    Config->>Audit: visit(Config: ConfigurationFile)
-    Audit->>Audit: collect production debug and insecure-setting findings
-    Root->>Pom: accept(visitor)
-    Pom->>Audit: visit(Pom: DependencyFile)
-    Audit->>Audit: collect vulnerable dependency finding
+    Note over Root,Audit: Remaining children use the same accept/visit protocol
     Root-->>Audit: traversal complete
     Audit->>Audit: report()
     Audit->>Report: new SecurityReport(findings snapshot)

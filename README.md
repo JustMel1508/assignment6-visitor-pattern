@@ -24,10 +24,10 @@ mvn exec:java
 and verify the project, use `mvn clean verify`. The main class is
 `com.example.codeinspection.demo.Main`; an IDE can run it directly.
 
-The suite has **34 JUnit 5 tests** across seven test classes. It covers dispatch,
+The suite has **37 JUnit 5 tests** across seven test classes. It covers dispatch,
 recursive traversal, cycle prevention, constructor validation, immutable snapshots,
-security rules, fractional statistics, threshold boundaries, missing production
-data, deferred compliance, visitor reuse, debt arithmetic, and console integration.
+security rules, fractional statistics, exact and near-threshold boundaries, missing
+production data, deferred compliance, visitor reuse, debt arithmetic, and console integration.
 Surefire writes the actual results to `target/surefire-reports/`.
 
 ## Model and traversal
@@ -51,8 +51,11 @@ Dependency versions may be null or blank so inspections can report invalid manif
 `Directory.accept(visitor)` visits the directory first, then calls `accept` on
 each child. Visitors never recurse over children. Directories reject self-cycles,
 ancestor cycles, duplicate children, null children, and directories already attached
-to another parent. Child access returns an immutable snapshot. The recursive
-implementation is tested with 200 nested directories.
+to another parent. Within one project tree, each element instance may occur only once;
+this is checked when adding files to nested directories and when attaching prebuilt
+subtrees. Distinct immutable records with equal metadata can represent separate files
+in different directories. Child access returns an immutable snapshot. All five visitors
+are tested together with 500 nested directories and an empty sibling directory.
 
 Each visitor has `analyze(root)`, `reset()`, and `report()`. `analyze` resets state,
 traverses once, and returns an immutable report snapshot. For manual traversal,
@@ -93,6 +96,8 @@ source**. All three must pass for final PASS; otherwise the result is FAILED.
 Empty, test-only, and nonproduction-only projects therefore cannot appear ready
 for release. The ratio is an aggregate proxy, not execution coverage or proof that
 every production module has tests; compliance checks individual relationships.
+The quality report displays metric values without rounding to two decimal places,
+so values just outside a threshold remain visibly different from the boundary.
 
 **Compliance:** null, empty, and whitespace-only dependency versions fail. Other
 version strings are accepted as explicit versions; version syntax and inherited
