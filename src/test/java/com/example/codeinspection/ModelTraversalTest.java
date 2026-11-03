@@ -54,6 +54,34 @@ class ModelTraversalTest {
     }
 
     @Test
+    void sharedFileInstancesCannotBeCountedTwiceAnywhereInOneProjectTree() {
+        List<ProjectElement> files = List.of(source(), new TestFile("PayTest", 1, "Pay.java"),
+                new ConfigurationFile("app", true, false, false, false),
+                new DependencyFile("pom.xml", List.of()));
+        for (ProjectElement file : files) {
+            Directory root = new Directory("root");
+            Directory left = new Directory("left").add(file);
+            Directory right = new Directory("right");
+            root.add(left).add(right);
+            assertThrows(IllegalArgumentException.class, () -> right.add(file));
+            assertTrue(right.children().isEmpty(), "Rejected attachment must not mutate the tree");
+
+            Directory candidate = new Directory("candidate").add(file);
+            assertThrows(IllegalArgumentException.class, () -> root.add(candidate));
+            assertEquals(List.of(left, right), root.children());
+            assertDoesNotThrow(() -> new Directory("independent-project").add(candidate),
+                    "Rejected subtree must remain unattached");
+        }
+        Directory distinctFiles = new Directory("root")
+                .add(new Directory("a").add(source()))
+                .add(new Directory("b").add(source()));
+        RecordingVisitor visitor = new RecordingVisitor();
+        distinctFiles.accept(visitor);
+        assertEquals(2, visitor.calls.stream().filter(call -> call.equals("source:Pay.java")).count(),
+                "Equal records can represent distinct files in different directories");
+    }
+
+    @Test
     void childrenAndDependencyEntriesAreDefensiveSnapshots() {
         Directory root = new Directory("root");
         List<ProjectElement> snapshot = root.children();

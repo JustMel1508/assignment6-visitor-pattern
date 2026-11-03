@@ -2,8 +2,11 @@ package com.example.codeinspection.model;
 
 import com.example.codeinspection.visitor.ProjectVisitor;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /** Composite with preorder traversal. Visitors must not traverse its children themselves. */
 public final class Directory implements ProjectElement {
@@ -28,27 +31,25 @@ public final class Directory implements ProjectElement {
         if (children.contains(child)) {
             throw new IllegalArgumentException("Child is already in " + name);
         }
-        // Use dispatch to inspect the candidate subtree without conditional type inspection.
-        Directory[] candidateRoot = new Directory[1];
-        child.accept(new ProjectVisitor() {
-            @Override public void visit(SourceCodeFile file) { }
-            @Override public void visit(TestFile file) { }
-            @Override public void visit(ConfigurationFile file) { }
-            @Override public void visit(DependencyFile file) { }
-            @Override public void visit(Directory directory) {
-                if (directory == Directory.this) {
-                    throw new IllegalArgumentException("Directory cycles are not allowed");
-                }
-                if (candidateRoot[0] == null) {
-                    candidateRoot[0] = directory;
-                }
+        Directory treeRoot = this;
+        while (treeRoot.parent != null) {
+            treeRoot = treeRoot.parent;
+        }
+        // Check the whole containing tree: a leaf shared with a sibling also causes double counting.
+        StructureVisitor existing = new StructureVisitor();
+        treeRoot.accept(existing);
+        StructureVisitor candidate = new StructureVisitor();
+        child.accept(candidate);
+        for (ProjectElement element : candidate.elements) {
+            if (existing.elements.contains(element)) {
+                throw new IllegalArgumentException("Cycles and shared element instances are not allowed in one tree");
             }
-        });
-        if (candidateRoot[0] != null) {
-            if (candidateRoot[0].parent != null) {
+        }
+        if (candidate.rootDirectory != null) {
+            if (candidate.rootDirectory.parent != null) {
                 throw new IllegalArgumentException("Directory already has a parent");
             }
-            candidateRoot[0].parent = this;
+            candidate.rootDirectory.parent = this;
         }
         children.add(child);
         return this;
@@ -59,6 +60,29 @@ public final class Directory implements ProjectElement {
         Objects.requireNonNull(visitor, "visitor").visit(this);
         for (ProjectElement child : children()) {
             child.accept(visitor);
+        }
+    }
+
+    /** Identity matters: equal immutable records may represent distinct files in different directories. */
+    private static final class StructureVisitor implements ProjectVisitor {
+        private final Set<ProjectElement> elements = Collections.newSetFromMap(new IdentityHashMap<>());
+        private Directory rootDirectory;
+
+        private void record(ProjectElement element) {
+            if (!elements.add(element)) {
+                throw new IllegalArgumentException("Element occurs more than once in the subtree");
+            }
+        }
+
+        @Override public void visit(SourceCodeFile file) { record(file); }
+        @Override public void visit(TestFile file) { record(file); }
+        @Override public void visit(ConfigurationFile file) { record(file); }
+        @Override public void visit(DependencyFile file) { record(file); }
+        @Override public void visit(Directory directory) {
+            record(directory);
+            if (rootDirectory == null) {
+                rootDirectory = directory;
+            }
         }
     }
 }

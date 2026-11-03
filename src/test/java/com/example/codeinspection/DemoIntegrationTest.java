@@ -1,13 +1,67 @@
 package com.example.codeinspection;
 
 import com.example.codeinspection.demo.Main;
+import com.example.codeinspection.model.ConfigurationFile;
+import com.example.codeinspection.model.Dependency;
+import com.example.codeinspection.model.DependencyFile;
+import com.example.codeinspection.model.Directory;
+import com.example.codeinspection.model.SourceCodeFile;
+import com.example.codeinspection.model.TestFile;
+import com.example.codeinspection.visitor.ComplianceVisitor;
+import com.example.codeinspection.visitor.ProjectStatisticsVisitor;
+import com.example.codeinspection.visitor.QualityGateVisitor;
+import com.example.codeinspection.visitor.SecurityAuditVisitor;
+import com.example.codeinspection.visitor.TechnicalDebtVisitor;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DemoIntegrationTest {
+    @Test
+    void allFiveVisitorsAgreeOnADeeplyNestedCleanProjectWithoutDoubleCounting() {
+        Directory root = new Directory("root").add(new Directory("empty"));
+        Directory current = root;
+        for (int i = 0; i < 500; i++) {
+            Directory next = new Directory("level" + i);
+            current.add(next);
+            current = next;
+        }
+        current.add(new SourceCodeFile("A", 10, 3, false, false, true, 0))
+                .add(new SourceCodeFile("B", 20, 7, false, false, true, 0))
+                .add(new TestFile("ATest", 3, "A"))
+                .add(new TestFile("BTest", 7, "B"))
+                .add(new ConfigurationFile("production", true, false, false, false))
+                .add(new DependencyFile("pom.xml", List.of(new Dependency("sdk", "1", false))))
+                .add(new DependencyFile("module/pom.xml", List.of(new Dependency("json", "2", false))));
+
+        var statistics = new ProjectStatisticsVisitor().analyze(root);
+        var security = new SecurityAuditVisitor().analyze(root);
+        var quality = new QualityGateVisitor().analyze(root);
+        var compliance = new ComplianceVisitor().analyze(root);
+        var debt = new TechnicalDebtVisitor().analyze(root);
+        assertEquals(7, statistics.fileCount());
+        assertEquals(502, statistics.directoryCount());
+        assertEquals(40, statistics.linesOfCode());
+        assertEquals(2, statistics.dependencyCount());
+        assertEquals(2, statistics.sourceFileCount());
+        assertEquals(2, statistics.testFileCount());
+        assertEquals(5.0, statistics.averageComplexity());
+        assertEquals(1.0, statistics.testSourceRatio());
+        assertEquals(0, security.issueCount());
+        assertEquals(100, security.score());
+        assertEquals(statistics, quality.statistics());
+        assertEquals(security, quality.security());
+        assertTrue(quality.passed());
+        assertTrue(compliance.compliant());
+        assertEquals(0, compliance.violationCount());
+        assertTrue(debt.findings().isEmpty());
+        assertEquals(2, debt.perFile().size());
+        assertEquals(0, debt.estimatedMinutes());
+    }
+
     @Test
     void consoleRunsAllFiveReportsAndDisplaysCrossCheckedFintechResults() {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
