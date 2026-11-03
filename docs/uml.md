@@ -1,6 +1,8 @@
-# UML diagrams
+# UML diagram source
 
-These diagrams show the implemented production structure. File elements are Java
+The submission images are `uml-class-diagram.png` and `uml-sequence-diagram.png`,
+embedded directly in README. The Mermaid definitions below retain editable views
+of the same implementation. File elements are Java
 records; Directory is a mutable composite. Each analysis visitor implements all five
 overloads declared by ProjectVisitor. Key properties and methods are shown; immutable
 result records and Directory's private validation visitor are omitted for readability.
@@ -98,7 +100,7 @@ classDiagram
     ProjectVisitor <|.. ComplianceVisitor
     ProjectVisitor <|.. TechnicalDebtVisitor
     Directory "0..1" *-- "0..*" ProjectElement : children within one tree
-    DependencyFile "1" o-- "0..*" Dependency : entries
+    DependencyFile "0..*" o-- "0..*" Dependency : entries
     ProjectElement ..> ProjectVisitor : accept and double dispatch
     QualityGateVisitor *-- SecurityAuditVisitor : delegates visits
     QualityGateVisitor *-- ProjectStatisticsVisitor : delegates visits
@@ -106,8 +108,9 @@ classDiagram
 
 ## Sequence diagram
 
-The security traversal below shows the first source in the actual nested fintech
-fixture; subsequent children are summarized to keep the diagram readable. Directory
+The security traversal below uses the supported manual API on the fintech fixture.
+The client creates a fresh visitor, invokes `root.accept(visitor)`, and requests
+`report()` after traversal. Subsequent children are summarized to keep the diagram readable. Directory
 owns traversal; `visit(Directory)` never traverses its children. Other analyses follow
 the same dispatch protocol on the same tree. Compliance defers its cross-file test
 matching until `report()` after collection. Root elements have no parent; each element
@@ -115,31 +118,38 @@ instance occurs at most once within a project tree.
 
 ```mermaid
 sequenceDiagram
-    participant Main
+    actor Client
     participant Root as fintech-project (Directory)
     participant Src as src (Directory)
     participant Pay as PaymentService (SourceCodeFile)
     participant Audit as SecurityAuditVisitor
-    participant Report as SecurityReport
-    Note over Main,Root: Main obtains the tree from FintechProject.create()
-    Main->>Audit: new SecurityAuditVisitor()
-    Main->>Audit: analyze(Root)
-    activate Audit
-    Audit->>Audit: reset()
-    Audit->>Root: accept(this)
-    Root->>Audit: visit(Root)
+    Note over Client,Root: Root is the tree built by FintechProject.create()
+    Client->>Audit: new SecurityAuditVisitor()
+    Client->>Root: accept(visitor)
+    activate Root
+    Root->>Audit: visit(this: Directory)
     Note over Root,Audit: Directory visit does not recurse
     Root->>Src: accept(visitor)
+    activate Src
     Src->>Audit: visit(Src)
     Src->>Pay: accept(visitor)
-    Pay->>Audit: visit(Pay: SourceCodeFile)
+    activate Pay
+    Pay->>Audit: visit(this: SourceCodeFile)
+    activate Audit
     Audit->>Audit: collect credentials and high-risk findings
-    Note over Root,Audit: Remaining children use the same accept/visit protocol
-    Root-->>Audit: traversal complete
-    Audit->>Audit: report()
-    Audit->>Report: new SecurityReport(findings snapshot)
-    Audit-->>Main: immutable SecurityReport
+    Audit-->>Pay: return
     deactivate Audit
-    Main->>Report: toString() via println
-    Report-->>Main: five findings, one critical, score zero
+    Pay-->>Src: accept complete
+    deactivate Pay
+    Note over Src,Audit: UserService.java follows the same accept/visit protocol
+    Src-->>Root: subtree complete
+    deactivate Src
+    Note over Root,Audit: Tests, configuration and dependencies use the same accept/visit protocol
+    Root-->>Client: traversal complete
+    deactivate Root
+    Client->>Audit: report()
+    activate Audit
+    Audit->>Audit: create immutable SecurityReport snapshot
+    Audit-->>Client: SecurityReport with five findings, one critical, score zero
+    deactivate Audit
 ```

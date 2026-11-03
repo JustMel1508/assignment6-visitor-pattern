@@ -165,9 +165,14 @@ test. These results are independently asserted in the test suite.
 
 ## UML
 
-See the [class and sequence diagrams](docs/uml.md), written in GitHub-renderable
-Mermaid. The class diagram shows the five element types, five analysis visitors,
-double-dispatch contract, directory composition, and quality gate delegation.
+The class diagram shows the five element types, five analysis visitors, directory
+composition, and quality gate delegation. The sequence diagram shows the supported
+manual traversal API, recursive processing, double dispatch, and report creation.
+Both diagrams are high-resolution PNG images; open an image to inspect its full size.
+
+![UML Class Diagram](docs/uml-class-diagram.png)
+
+![UML Sequence Diagram](docs/uml-sequence-diagram.png)
 
 ## Required Visitor questions
 
