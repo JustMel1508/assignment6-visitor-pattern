@@ -27,8 +27,8 @@ public record QualityGateReport(SecurityReport security, StatisticsReport statis
     public String toString() {
         return String.format(Locale.ROOT,
                 "QUALITY GATE REPORT%nSecurity:   %s (critical issues: %d; required: 0)%n"
-                        + "Complexity: %s (average: %.2f; maximum: %.2f)%n"
-                        + "Tests:      %s (test/source ratio: %.2f; minimum: %.2f; production sources: %d)%n"
+                        + "Complexity: %s (average: %s; maximum: %.2f)%n"
+                        + "Tests:      %s (test/source ratio: %s; minimum: %.2f; production sources: %d)%n"
                         + "Production source required for release; test/source ratio is not measured coverage.%n"
                         + "FINAL RESULT: %s",
                 status(securityPassed()), security.criticalIssueCount(), status(complexityPassed()),

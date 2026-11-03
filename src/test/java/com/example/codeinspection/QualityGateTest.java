@@ -5,9 +5,12 @@ import com.example.codeinspection.model.Directory;
 import com.example.codeinspection.model.SourceCodeFile;
 import com.example.codeinspection.model.TestFile;
 import com.example.codeinspection.report.QualityGateReport;
+import com.example.codeinspection.report.SecurityReport;
+import com.example.codeinspection.report.StatisticsReport;
 import com.example.codeinspection.visitor.ProjectStatisticsVisitor;
 import com.example.codeinspection.visitor.QualityGateVisitor;
 import com.example.codeinspection.visitor.SecurityAuditVisitor;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -96,5 +99,18 @@ class QualityGateTest {
         assertEquals(1, report.security().issueCount());
         assertEquals(0, report.security().criticalIssueCount());
         assertTrue(report.passed());
+    }
+
+    @Test
+    void nearThresholdFailuresDisplayMetricsWithoutRoundingThemToPassingBoundaries() {
+        QualityGateReport report = new QualityGateReport(new SecurityReport(List.of()),
+                new StatisticsReport(1399, 0, 399, 0, 1000, 1000, 1, 10001));
+        assertEquals(10.001, report.statistics().averageComplexity());
+        assertEquals(0.399, report.statistics().testSourceRatio());
+        assertFalse(report.complexityPassed());
+        assertFalse(report.testsPassed());
+        assertFalse(report.passed());
+        assertTrue(report.toString().contains("average: 10.001"));
+        assertTrue(report.toString().contains("test/source ratio: 0.399"));
     }
 }
